@@ -151,16 +151,6 @@ def get_druk_number_from_link(link):
     return None
 
 
-def get_druk_number_from_text(text: str):
-    """Try to extract 'DRUK NR <number>' from arbitrary text."""
-    if not text:
-        return None
-    m = re.search(r"DRUK\s*NR\s*(\d+)", text, re.I)
-    if m:
-        return m.group(1)
-    return None
-
-
 def extract_text_from_pdf(file_path):
     """Extract text from PDF file."""
     try:
@@ -260,29 +250,68 @@ def analyze_content_with_ai(content_text):
         return ""
 
 
+def _sanitize_word(word: str):
+    word = re.sub(r"[^\p{L}0-9]+", "", word, flags=re.UNICODE)
+    return word.strip().lower()
+
+
+def generate_fallback_keywords(link, original_filename):
+    """Generate up to 3 Polish-ish keywords from link text / filename if AI fails.
+    Very simple heuristic: take non-stopword tokens from link text first, then filename.
+    """
+    stopwords = {
+        'druk','nr','numer','projekt','uchwały','uchwala','uchwała','załącznik','plik','pdf','doc','docx','xls','xlsx',
+        'miasta','rady','pily','piły','porządek','obrad','sesji','sesja','do','w','i','o','na','z','dla','oraz','dot','dotycząca','dotyczący'
+    }
+    tokens = []
+    try:
+        link_text = link.get_text(strip=True) if link else ""
+    except Exception:
+        link_text = ""
+    filename_stem = os.path.splitext(os.path.basename(original_filename))[0]
+    raw_tokens = (link_text + " " + filename_stem).replace('_', ' ').split()
+    for t in raw_tokens:
+        s = _sanitize_word(t)
+        if not s or s in stopwords:
+            continue
+        tokens.append(s)
+    # keep first 3 unique tokens
+    seen = set()
+    uniq = []
+    for t in tokens:
+        if t not in seen:
+            seen.add(t)
+            uniq.append(t)
+        if len(uniq) == 3:
+            break
+    return "_".join(uniq)
+
+
 def generate_new_filename(link, original_filename, ai_keywords=""):
     """Generate new filename based on druk number, AI keywords, and file type."""
     druk_number = get_druk_number_from_link(link)
     
+    if not druk_number:
+        # If no druk number found, return original filename
+        return original_filename
+    
     file_ext = os.path.splitext(original_filename)[1].lower()
     
-    if druk_number:
-        # Build base name with druk number
-        base_name = f"DRUK_NR{druk_number}"
-        if ai_keywords:
-            base_name += f"_{ai_keywords}"
-        if file_ext == ".gml":
-            return f"{base_name}_załącznik.gml"
-        elif file_ext in [".pdf", ".doc", ".docx", ".xls", ".xlsx"]:
-            return f"{base_name}{file_ext}"
-        else:
-            name_without_ext = os.path.splitext(original_filename)[0]
-            return f"{base_name}_{name_without_ext}{file_ext}"
+    # Build base name with druk number
+    base_name = f"DRUK_NR{druk_number}"
+    
+    # Add AI keywords if available
+    if ai_keywords:
+        base_name += f"_{ai_keywords}"
+    
+    if file_ext == ".gml":
+        return f"{base_name}_załącznik.gml"
+    elif file_ext in [".pdf", ".doc", ".docx", ".xls", ".xlsx"]:
+        return f"{base_name}{file_ext}"
     else:
-        # No druk found: still use AI keywords if available; otherwise keep original
-        if ai_keywords:
-            return f"{ai_keywords}{file_ext}"
-        return original_filename
+        # For unknown extensions, keep original name but add druk number and keywords
+        name_without_ext = os.path.splitext(original_filename)[0]
+        return f"{base_name}_{name_without_ext}{file_ext}"
 
 
 def check_druk_exists_in_directory(save_dir, druk_number):
@@ -330,7 +359,7 @@ def download_attachments(porzadek_url, save_dir):
             file_url = urljoin(porzadek_url, href)
             original_filename = os.path.basename(file_url.split("?")[0])  # clean ?params
             
-            # Extract druk number from link (first try)
+            # Extract druk number first to check for duplicates
             druk_number = get_druk_number_from_link(link)
             
             # Check if file with this druk number already exists
@@ -358,11 +387,11 @@ def download_attachments(porzadek_url, save_dir):
             else:
                 print("Nie udało się wyciągnąć tekstu z pliku")
 
-            # If druk not found in link, try to detect it from the document text
-            if not druk_number:
-                detected = get_druk_number_from_text(content_text)
-                if detected:
-                    druk_number = detected
+            # Fallback keywords if AI empty
+            if not ai_keywords:
+                ai_keywords = generate_fallback_keywords(link, original_filename)
+                if ai_keywords:
+                    print(f"Słowa kluczowe (fallback): {ai_keywords}")
             
             if exists and not has_keywords:
                 # File exists but without keywords - rename existing file and remove temp
@@ -386,17 +415,7 @@ def download_attachments(porzadek_url, save_dir):
                 os.remove(temp_filepath)
             else:
                 # New file - generate filename and save
-                # Use a synthetic object to pass druk via link if we detected it from text
                 final_filename = generate_new_filename(link, original_filename, ai_keywords)
-                # If still no DRUK in name and we detected druk_number separately, enforce DRUK-based name
-                if (not final_filename.startswith("DRUK_NR")) and druk_number:
-                    base = f"DRUK_NR{druk_number}"
-                    if ai_keywords:
-                        base += f"_{ai_keywords}"
-                    if original_filename.lower().endswith('.gml'):
-                        final_filename = f"{base}_załącznik.gml"
-                    else:
-                        final_filename = f"{base}{os.path.splitext(original_filename)[1].lower()}"
                 final_filepath = os.path.join(save_dir, final_filename)
                 
                 # Rename temp file to final name
