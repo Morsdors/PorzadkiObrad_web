@@ -96,6 +96,12 @@
                                         <button class="btn btn-outline-secondary btn-sm" onclick="addNewAlbum()">
                                             <i class="bi bi-plus"></i> Nowy
                                         </button>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="promptChangeFolderPath()">
+                                            <i class="bi bi-folder2-open"></i> Zmień folder
+                                        </button>
+                                    </div>
+                                    <div class="small text-muted mt-2">
+                                        <i class="bi bi-hdd"></i> Aktualny folder: <span id="currentDownloadDir">Ładowanie...</span>
                                     </div>
                                 </div>
                             </div>
@@ -343,6 +349,7 @@
                 document.getElementById('latestPorzadek').textContent = `Porządek ${data.latest_porzadek}`;
                 document.getElementById('existingSessions').textContent = `${data.existing_sessions_count} sesji`;
                 document.getElementById('updateTime').textContent = new Date().toLocaleString('pl-PL');
+                document.getElementById('currentDownloadDir').textContent = data.current_download_dir;
                 
                 // Update download status
                 if (data.download_status.is_running) {
@@ -752,6 +759,32 @@
                 
             } catch (error) {
                 showError('Błąd podczas zmiany albumu');
+            }
+        }
+
+        async function promptChangeFolderPath() {
+            const current = document.getElementById('currentDownloadDir').textContent || '';
+            const newPath = prompt('Podaj pełną ścieżkę folderu zapisu (zostanie utworzony, jeśli nie istnieje):', current);
+            if (!newPath || !newPath.trim()) return;
+            try {
+                const response = await fetch('/api/settings/folder/set_path', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: newPath.trim() })
+                });
+                const data = await response.json();
+                if (data.error) {
+                    showError('Błąd zmiany folderu: ' + data.error);
+                    return;
+                }
+                showSuccess('Folder zapisów zmieniony');
+                document.getElementById('currentDownloadDir').textContent = data.new_download_dir;
+                setTimeout(() => {
+                    refreshFiles();
+                    refreshStatus();
+                }, 1000);
+            } catch (error) {
+                showError('Błąd podczas zmiany folderu');
             }
         }
 

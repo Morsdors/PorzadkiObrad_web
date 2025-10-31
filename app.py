@@ -15,7 +15,8 @@ from rada_scraper import (
 app = Flask(__name__)
 
 # Configuration
-DEFAULT_DOWNLOAD_DIR = r"C:\Users\PC\Desktop\SesjeRady"
+# Prefer environment variable when available (works on Render and locally)
+DEFAULT_DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "./data")
 SETTINGS_FILE = "app_settings.json"
 LOG_FILE = "download_log.json"
 
@@ -103,6 +104,34 @@ def set_download_dir(new_dir):
     save_settings()
     # Ensure directory exists
     Path(new_dir).mkdir(parents=True, exist_ok=True)
+
+
+@app.route('/api/settings/folder/set_path', methods=['POST'])
+def set_folder_absolute_path():
+    """Set download folder to an absolute path provided by the user"""
+    try:
+        data = request.get_json() or {}
+        raw_path = str(data.get('path', '')).strip()
+        if not raw_path:
+            return jsonify({"error": "Ścieżka nie może być pusta"}), 400
+
+        # Expand user (~) and make absolute
+        expanded = os.path.expanduser(raw_path)
+        absolute_path = os.path.abspath(expanded)
+
+        # Create directory if needed
+        Path(absolute_path).mkdir(parents=True, exist_ok=True)
+
+        # Update settings
+        set_download_dir(absolute_path)
+        log_action("Zmieniono folder (ścieżka)", absolute_path)
+
+        return jsonify({
+            "message": "Folder zmieniony pomyślnie",
+            "new_download_dir": absolute_path
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/')
 def index():
