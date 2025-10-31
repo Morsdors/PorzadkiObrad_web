@@ -764,6 +764,24 @@
 
         async function promptChangeFolderPath() {
             const current = document.getElementById('currentDownloadDir').textContent || '';
+            // First try native dialog (local only). If not available, fallback to prompt.
+            try {
+                const pickResp = await fetch('/api/settings/folder/pick', { method: 'POST' });
+                const pickData = await pickResp.json();
+                if (pickData && pickData.new_download_dir) {
+                    showSuccess('Folder zapisów zmieniony');
+                    document.getElementById('currentDownloadDir').textContent = pickData.new_download_dir;
+                    setTimeout(() => { refreshFiles(); refreshStatus(); }, 1000);
+                    return;
+                }
+                if (pickData && pickData.cancelled) {
+                    return; // user cancelled
+                }
+                // If error from picker, fall through to prompt
+            } catch (e) {
+                // Ignore and fallback
+            }
+
             const newPath = prompt('Podaj pełną ścieżkę folderu zapisu (zostanie utworzony, jeśli nie istnieje):', current);
             if (!newPath || !newPath.trim()) return;
             try {
@@ -779,10 +797,7 @@
                 }
                 showSuccess('Folder zapisów zmieniony');
                 document.getElementById('currentDownloadDir').textContent = data.new_download_dir;
-                setTimeout(() => {
-                    refreshFiles();
-                    refreshStatus();
-                }, 1000);
+                setTimeout(() => { refreshFiles(); refreshStatus(); }, 1000);
             } catch (error) {
                 showError('Błąd podczas zmiany folderu');
             }

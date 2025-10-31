@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import json
 from pathlib import Path
+import sys
 
 # Import our existing functions (we'll refactor script.py)
 from rada_scraper import (
@@ -125,6 +126,45 @@ def set_folder_absolute_path():
         # Update settings
         set_download_dir(absolute_path)
         log_action("Zmieniono folder (ścieżka)", absolute_path)
+
+        return jsonify({
+            "message": "Folder zmieniony pomyślnie",
+            "new_download_dir": absolute_path
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/settings/folder/pick', methods=['POST'])
+def pick_folder_via_dialog():
+    """Open a native folder selection dialog (local use only). Not supported on Render."""
+    try:
+        # Disallow on headless/server environments
+        if os.environ.get('RENDER') or not (sys.platform.startswith('win') or sys.platform.startswith('darwin') or sys.platform.startswith('linux')):
+            return jsonify({"error": "Ta funkcja jest dostępna tylko lokalnie (nie na serwerze)."}), 400
+
+        # Try to open a native dialog using Tkinter
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except Exception:
+            return jsonify({"error": "Brak wsparcia dla interfejsu graficznego."}), 400
+
+        # Create hidden root window
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        selected = filedialog.askdirectory(title='Wybierz folder zapisu plików')
+        root.destroy()
+
+        if not selected:
+            return jsonify({"cancelled": True})
+
+        # Normalize and set
+        absolute_path = os.path.abspath(os.path.expanduser(selected))
+        Path(absolute_path).mkdir(parents=True, exist_ok=True)
+        set_download_dir(absolute_path)
+        log_action("Zmieniono folder (dialog)", absolute_path)
 
         return jsonify({
             "message": "Folder zmieniony pomyślnie",
