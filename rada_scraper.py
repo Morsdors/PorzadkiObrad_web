@@ -151,6 +151,16 @@ def get_druk_number_from_link(link):
     return None
 
 
+def get_druk_number_from_text(text: str):
+    """Try to extract 'DRUK NR <number>' from arbitrary text."""
+    if not text:
+        return None
+    m = re.search(r"DRUK\s*NR\s*(\d+)", text, re.I)
+    if m:
+        return m.group(1)
+    return None
+
+
 def extract_text_from_pdf(file_path):
     """Extract text from PDF file."""
     try:
@@ -254,27 +264,25 @@ def generate_new_filename(link, original_filename, ai_keywords=""):
     """Generate new filename based on druk number, AI keywords, and file type."""
     druk_number = get_druk_number_from_link(link)
     
-    if not druk_number:
-        # If no druk number found, return original filename
-        return original_filename
-    
     file_ext = os.path.splitext(original_filename)[1].lower()
     
-    # Build base name with druk number
-    base_name = f"DRUK_NR{druk_number}"
-    
-    # Add AI keywords if available
-    if ai_keywords:
-        base_name += f"_{ai_keywords}"
-    
-    if file_ext == ".gml":
-        return f"{base_name}_załącznik.gml"
-    elif file_ext in [".pdf", ".doc", ".docx", ".xls", ".xlsx"]:
-        return f"{base_name}{file_ext}"
+    if druk_number:
+        # Build base name with druk number
+        base_name = f"DRUK_NR{druk_number}"
+        if ai_keywords:
+            base_name += f"_{ai_keywords}"
+        if file_ext == ".gml":
+            return f"{base_name}_załącznik.gml"
+        elif file_ext in [".pdf", ".doc", ".docx", ".xls", ".xlsx"]:
+            return f"{base_name}{file_ext}"
+        else:
+            name_without_ext = os.path.splitext(original_filename)[0]
+            return f"{base_name}_{name_without_ext}{file_ext}"
     else:
-        # For unknown extensions, keep original name but add druk number and keywords
-        name_without_ext = os.path.splitext(original_filename)[0]
-        return f"{base_name}_{name_without_ext}{file_ext}"
+        # No druk found: still use AI keywords if available; otherwise keep original
+        if ai_keywords:
+            return f"{ai_keywords}{file_ext}"
+        return original_filename
 
 
 def check_druk_exists_in_directory(save_dir, druk_number):
@@ -322,7 +330,7 @@ def download_attachments(porzadek_url, save_dir):
             file_url = urljoin(porzadek_url, href)
             original_filename = os.path.basename(file_url.split("?")[0])  # clean ?params
             
-            # Extract druk number first to check for duplicates
+            # Extract druk number from link (first try)
             druk_number = get_druk_number_from_link(link)
             
             # Check if file with this druk number already exists
@@ -349,6 +357,12 @@ def download_attachments(porzadek_url, save_dir):
                 print(f"AI wygenerował słowa kluczowe: {ai_keywords}")
             else:
                 print("Nie udało się wyciągnąć tekstu z pliku")
+
+            # If druk not found in link, try to detect it from the document text
+            if not druk_number:
+                detected = get_druk_number_from_text(content_text)
+                if detected:
+                    druk_number = detected
             
             if exists and not has_keywords:
                 # File exists but without keywords - rename existing file and remove temp
@@ -372,7 +386,17 @@ def download_attachments(porzadek_url, save_dir):
                 os.remove(temp_filepath)
             else:
                 # New file - generate filename and save
+                # Use a synthetic object to pass druk via link if we detected it from text
                 final_filename = generate_new_filename(link, original_filename, ai_keywords)
+                # If still no DRUK in name and we detected druk_number separately, enforce DRUK-based name
+                if (not final_filename.startswith("DRUK_NR")) and druk_number:
+                    base = f"DRUK_NR{druk_number}"
+                    if ai_keywords:
+                        base += f"_{ai_keywords}"
+                    if original_filename.lower().endswith('.gml'):
+                        final_filename = f"{base}_załącznik.gml"
+                    else:
+                        final_filename = f"{base}{os.path.splitext(original_filename)[1].lower()}"
                 final_filepath = os.path.join(save_dir, final_filename)
                 
                 # Rename temp file to final name
