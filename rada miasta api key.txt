@@ -1,0 +1,8 @@
+Rada miasta OpenRouter API key
+
+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
+
+
+model ID
+
+nvidia/nemotron-nano-9b-v2:free

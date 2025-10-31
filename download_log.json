@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2025-10-28T23:52:02.039681",
+    "action": "Błąd pobierania sesji",
+    "details": "name 'DOWNLOAD_BASE_DIR' is not defined"
+  },
+  {
+    "timestamp": "2025-10-28T23:59:04.473989",
+    "action": "Zaktualizowano istniejące sesje",
+    "details": "Zaktualizowane 3 sesji"
+  }
+]

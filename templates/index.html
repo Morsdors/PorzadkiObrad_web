@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rada Miasta Piły - Pobieranie Dokumentów</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <style>
+        .card {
+            transition: transform 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        .status-card {
+            border-left: 4px solid #0d6efd;
+        }
+        .progress-container {
+            display: none;
+        }
+        .log-item {
+            font-size: 0.9em;
+            padding: 0.5rem;
+            border-left: 3px solid #dee2e6;
+            margin-bottom: 0.5rem;
+        }
+        .log-item.success {
+            border-left-color: #198754;
+            background-color: #f8f9fa;
+        }
+        .log-item.error {
+            border-left-color: #dc3545;
+            background-color: #fff5f5;
+        }
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .main-buttons .btn {
+            min-height: 60px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-file-earmark-text me-2"></i>
+                Rada Miasta Piły
+            </a>
+            <div class="navbar-nav ms-auto">
+                <span class="navbar-text" id="lastUpdate">
+                    Ostatnia aktualizacja: <span id="updateTime">---</span>
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        
+        <!-- Status Card -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card status-card">
+                    <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="card-title mb-1">Status Systemu</h5>
+                            <div class="row">
+                                <div class="col-sm-4">
+                                    <small class="text-muted">Najnowsza Sesja:</small>
+                                    <div class="fw-bold" id="latestSesja">Ładowanie...</div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <small class="text-muted">Najnowszy Porządek:</small>
+                                    <div class="fw-bold" id="latestPorzadek">Ładowanie...</div>
+                                </div>
+                                <div class="col-sm-4">
+                                    <small class="text-muted">Istniejące Sesje:</small>
+                                    <div class="fw-bold" id="existingSessions">Ładowanie...</div>
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-12">
+                                    <small class="text-muted">Album Zapisu:</small>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <select class="form-select form-select-sm" id="albumSelector" style="width: auto;">
+                                            <option value="">Ładowanie...</option>
+                                        </select>
+                                        <button class="btn btn-outline-secondary btn-sm" onclick="addNewAlbum()">
+                                            <i class="bi bi-plus"></i> Nowy
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                            <div class="col-md-4 text-end">
+                                <div class="text-muted small">
+                                    Źródło danych: 
+                                    <a href="https://bip.pila.pl/2025.html" target="_blank" class="text-decoration-none">
+                                        <i class="bi bi-link-45deg"></i> bip.pila.pl
+                                    </a>
+                                </div>
+                                <button class="btn btn-outline-primary btn-sm mt-2" onclick="refreshStatus()">
+                                    <i class="bi bi-arrow-clockwise"></i> Odśwież
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Bar (Hidden by default) -->
+        <div class="progress-container mb-4">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0" id="progressTitle">Pobieranie w toku...</h6>
+                        <span class="badge bg-primary" id="progressPercent">0%</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%" id="progressBar"></div>
+                    </div>
+                    <small class="text-muted mt-2 d-block" id="progressDetails">Inicjalizacja...</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Action Buttons -->
+        <div class="row mb-4 main-buttons">
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-download text-primary fs-1 mb-3"></i>
+                        <h5 class="card-title">Pobierz Najnowsze</h5>
+                        <p class="card-text text-muted">Pobiera pliki z najnowszej sesji i najnowszego porządku</p>
+                        <button class="btn btn-primary btn-lg w-100" onclick="downloadLatest()" id="btnLatest">
+                            <i class="bi bi-download me-2"></i>Pobierz Ostatnie
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-arrow-repeat text-success fs-1 mb-3"></i>
+                        <h5 class="card-title">Aktualizuj Istniejące</h5>
+                        <p class="card-text text-muted">Aktualizuje tylko sesje które już mamy pobrane</p>
+                        <button class="btn btn-success btn-lg w-100" onclick="downloadAll()" id="btnAll">
+                            <i class="bi bi-arrow-repeat me-2"></i>Aktualizuj Istniejące
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-cloud-download text-info fs-1 mb-3"></i>
+                        <h5 class="card-title">Pobierz Wszystkie</h5>
+                        <p class="card-text text-muted">Pobiera kompletnie WSZYSTKIE sesje od pierwszej</p>
+                        <button class="btn btn-info btn-lg w-100" onclick="downloadFromFirst()" id="btnFromFirst">
+                            <i class="bi bi-cloud-download me-2"></i>Pobierz Wszystkie
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-3 col-md-6 mb-3">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-search text-warning fs-1 mb-3"></i>
+                        <h5 class="card-title">Wybierz Sesję</h5>
+                        <p class="card-text text-muted">Pobierz konkretną sesję według numeru</p>
+                        <div class="input-group mb-3">
+                            <input type="number" class="form-control form-control-lg text-center" 
+                                   placeholder="Nr sesji" id="sessionNumber" min="1" max="50">
+                        </div>
+                        <button class="btn btn-warning btn-lg w-100" onclick="downloadSession()" id="btnSession">
+                            <i class="bi bi-search me-2"></i>Pobierz Sesję
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabs for Additional Features -->
+        <div class="row">
+            <div class="col-12">
+                <ul class="nav nav-tabs" id="mainTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button">
+                            <i class="bi bi-folder2-open me-2"></i>Pliki
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="logs-tab" data-bs-toggle="tab" data-bs-target="#logs" type="button">
+                            <i class="bi bi-journal-text me-2"></i>Historia
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="stats-tab" data-bs-toggle="tab" data-bs-target="#stats" type="button">
+                            <i class="bi bi-graph-up me-2"></i>Statystyki
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content border border-top-0 bg-white rounded-bottom" id="mainTabsContent">
+                    
+                    <!-- Files Tab -->
+                    <div class="tab-pane fade show active p-3" id="files" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Pobrane Pliki</h6>
+                            <div>
+                                <input type="text" class="form-control form-control-sm" 
+                                       placeholder="Szukaj plików..." id="fileSearch" style="width: 250px;">
+                            </div>
+                        </div>
+                        <div id="filesList">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-folder2-open fs-1"></i>
+                                <p class="mt-2">Ładowanie plików...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Logs Tab -->
+                    <div class="tab-pane fade p-3" id="logs" role="tabpanel">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h6 class="mb-0">Historia Działań</h6>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="refreshLogs()">
+                                <i class="bi bi-arrow-clockwise"></i> Odśwież
+                            </button>
+                        </div>
+                        <div id="logsList">
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-journal-text fs-1"></i>
+                                <p class="mt-2">Ładowanie historii...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Stats Tab -->
+                    <div class="tab-pane fade p-3" id="stats" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="card bg-primary text-white">
+                                    <div class="card-body text-center">
+                                        <h2 class="mb-0" id="totalFiles">-</h2>
+                                        <small>Wszystkich Plików</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="card bg-success text-white">
+                                    <div class="card-body text-center">
+                                        <h2 class="mb-0" id="totalSessions">-</h2>
+                                        <small>Sesji</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="card bg-info text-white">
+                                    <div class="card-body text-center">
+                                        <h2 class="mb-0" id="totalSize">-</h2>
+                                        <small>Rozmiar (MB)</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-sm-6 mb-3">
+                                <div class="card bg-warning text-white">
+                                    <div class="card-body text-center">
+                                        <h2 class="mb-0" id="lastDownload">-</h2>
+                                        <small>Ostatnie Pobieranie</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-dark text-light text-center py-3 mt-5">
+        <div class="container">
+            <small>
+                © 2025 Rada Miasta Piły - System Pobierania Dokumentów | 
+                Powered by AI & Flask
+            </small>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Global variables
+        let isDownloading = false;
+        let statusCheckInterval;
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            refreshStatus();
+            refreshFiles();
+            refreshLogs();
+            loadFolderSettings();
+            
+            // Set up file search
+            document.getElementById('fileSearch').addEventListener('input', filterFiles);
+            
+            // Set up album selector change
+            document.getElementById('albumSelector').addEventListener('change', function() {
+                if (this.value) {
+                    changeAlbum(this.value);
+                }
+            });
+        });
+        
+        // API Functions
+        async function refreshStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('Błąd pobierania statusu: ' + data.error);
+                    return;
+                }
+                
+                document.getElementById('latestSesja').textContent = `Sesja ${data.latest_sesja}`;
+                document.getElementById('latestPorzadek').textContent = `Porządek ${data.latest_porzadek}`;
+                document.getElementById('existingSessions').textContent = `${data.existing_sessions_count} sesji`;
+                document.getElementById('updateTime').textContent = new Date().toLocaleString('pl-PL');
+                
+                // Update download status
+                if (data.download_status.is_running) {
+                    startStatusMonitoring();
+                    updateProgress(data.download_status);
+                }
+                
+            } catch (error) {
+                showError('Błąd połączenia z serwerem');
+            }
+        }
+        
+        async function downloadLatest() {
+            if (isDownloading) return;
+            
+            try {
+                const response = await fetch('/api/download/latest', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                showSuccess('Rozpoczęto pobieranie najnowszych plików');
+                startStatusMonitoring();
+                
+            } catch (error) {
+                showError('Błąd podczas rozpoczynania pobierania');
+            }
+        }
+        
+        async function downloadAll() {
+            if (isDownloading) return;
+            
+            if (!confirm('Czy na pewno chcesz zaktualizować wszystkie sesje? To może potrwać długo.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/download/all', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                showSuccess('Rozpoczęto aktualizację wszystkich sesji');
+                startStatusMonitoring();
+                
+            } catch (error) {
+                showError('Błąd podczas rozpoczynania aktualizacji');
+            }
+        }
+        
+        async function downloadSession() {
+            if (isDownloading) return;
+            
+            const sessionNumber = document.getElementById('sessionNumber').value;
+            if (!sessionNumber || sessionNumber < 1) {
+                showError('Podaj prawidłowy numer sesji');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/download/session/${sessionNumber}`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                showSuccess(`Rozpoczęto pobieranie Sesji ${sessionNumber}`);
+                startStatusMonitoring();
+                
+            } catch (error) {
+                showError('Błąd podczas rozpoczynania pobierania sesji');
+            }
+        }
+
+        async function downloadFromFirst() {
+            if (isDownloading) return;
+            
+            if (!confirm('Czy na pewno chcesz pobrać WSZYSTKIE sesje od pierwszej? To może potrwać bardzo długo i zająć dużo miejsca.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/download/from_first', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                showSuccess('Rozpoczęto pobieranie wszystkich sesji od pierwszej');
+                startStatusMonitoring();
+                
+            } catch (error) {
+                showError('Błąd podczas rozpoczynania pobierania od pierwszej sesji');
+            }
+        }
+        
+        async function refreshFiles() {
+            try {
+                const response = await fetch('/api/files');
+                const files = await response.json();
+                
+                displayFiles(files);
+                updateStats(files);
+                
+            } catch (error) {
+                document.getElementById('filesList').innerHTML = 
+                    '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p class="mt-2">Błąd ładowania plików</p></div>';
+            }
+        }
+        
+        async function refreshLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                const logs = await response.json();
+                
+                displayLogs(logs);
+                
+            } catch (error) {
+                document.getElementById('logsList').innerHTML = 
+                    '<div class="text-center text-danger py-4"><i class="bi bi-exclamation-triangle fs-1"></i><p class="mt-2">Błąd ładowania historii</p></div>';
+            }
+        }
+        
+        // UI Functions
+        function startStatusMonitoring() {
+            isDownloading = true;
+            document.querySelector('.progress-container').style.display = 'block';
+            
+            // Disable buttons
+            document.getElementById('btnLatest').disabled = true;
+            document.getElementById('btnAll').disabled = true;
+            document.getElementById('btnFromFirst').disabled = true;
+            document.getElementById('btnSession').disabled = true;
+            
+            // Start polling
+            statusCheckInterval = setInterval(checkDownloadStatus, 2000);
+        }
+        
+        function stopStatusMonitoring() {
+            isDownloading = false;
+            document.querySelector('.progress-container').style.display = 'none';
+            
+            // Enable buttons
+            document.getElementById('btnLatest').disabled = false;
+            document.getElementById('btnAll').disabled = false;
+            document.getElementById('btnFromFirst').disabled = false;
+            document.getElementById('btnSession').disabled = false;
+            
+            // Stop polling
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+            }
+            
+            // Refresh data
+            setTimeout(() => {
+                refreshFiles();
+                refreshLogs();
+                refreshStatus();
+            }, 1000);
+        }
+        
+        async function checkDownloadStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data.download_status) {
+                    updateProgress(data.download_status);
+                    
+                    if (!data.download_status.is_running) {
+                        stopStatusMonitoring();
+                        
+                        if (data.download_status.error) {
+                            showError('Błąd: ' + data.download_status.error);
+                        } else {
+                            showSuccess('Pobieranie zakończone pomyślnie!');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+        }
+        
+        function updateProgress(status) {
+            document.getElementById('progressTitle').textContent = status.current_task || 'Pobieranie w toku...';
+            document.getElementById('progressPercent').textContent = status.progress + '%';
+            document.getElementById('progressBar').style.width = status.progress + '%';
+            document.getElementById('progressDetails').textContent = 
+                status.last_update ? `Ostatnia aktualizacja: ${new Date(status.last_update).toLocaleTimeString('pl-PL')}` : '';
+        }
+        
+        function displayFiles(files) {
+            const container = document.getElementById('filesList');
+            
+            if (!files || files.length === 0) {
+                container.innerHTML = 
+                    '<div class="text-center text-muted py-4"><i class="bi bi-folder2-open fs-1"></i><p class="mt-2">Brak pobranych plików</p></div>';
+                return;
+            }
+            
+            // Group files by session and agenda
+            const grouped = {};
+            files.forEach(file => {
+                const key = `${file.sesja}/${file.porzadek}`;
+                if (!grouped[key]) {
+                    grouped[key] = [];
+                }
+                grouped[key].push(file);
+            });
+            
+            let html = '';
+            Object.keys(grouped).sort().reverse().forEach(group => {
+                const [sesja, porzadek] = group.split('/');
+                const groupFiles = grouped[group];
+                
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="bi bi-folder me-2"></i>
+                                ${sesja} - ${porzadek} 
+                                <span class="badge bg-secondary ms-2">${groupFiles.length} plików</span>
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                `;
+                
+                groupFiles.forEach(file => {
+                    const sizeKB = Math.round(file.size / 1024);
+                    const modifiedDate = new Date(file.modified).toLocaleDateString('pl-PL');
+                    
+                    html += `
+                        <div class="col-md-6 col-lg-4 mb-2 file-item" data-filename="${file.filename.toLowerCase()}">
+                            <div class="d-flex align-items-center p-2 border rounded">
+                                <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                                <div class="flex-grow-1 text-truncate">
+                                    <div class="fw-bold text-truncate" title="${file.filename}">${file.filename}</div>
+                                    <small class="text-muted">${sizeKB} KB • ${modifiedDate}</small>
+                                </div>
+                                <a href="/download/${file.path}" class="btn btn-outline-primary btn-sm ms-2" title="Pobierz">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function displayLogs(logs) {
+            const container = document.getElementById('logsList');
+            
+            if (!logs || logs.length === 0) {
+                container.innerHTML = 
+                    '<div class="text-center text-muted py-4"><i class="bi bi-journal-text fs-1"></i><p class="mt-2">Brak historii działań</p></div>';
+                return;
+            }
+            
+            let html = '';
+            logs.reverse().forEach(log => {
+                const date = new Date(log.timestamp).toLocaleString('pl-PL');
+                const isError = log.action.includes('Błąd') || log.action.includes('Error');
+                const logClass = isError ? 'error' : 'success';
+                
+                html += `
+                    <div class="log-item ${logClass}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <strong>${log.action}</strong>
+                            <small class="text-muted">${date}</small>
+                        </div>
+                        ${log.details ? `<div class="text-muted small mt-1">${log.details}</div>` : ''}
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        function updateStats(files) {
+            if (!files) return;
+            
+            const totalFiles = files.length;
+            const sessions = new Set(files.map(f => f.sesja)).size;
+            const totalSizeBytes = files.reduce((sum, f) => sum + f.size, 0);
+            const totalSizeMB = Math.round(totalSizeBytes / (1024 * 1024));
+            
+            const lastDownload = files.length > 0 ? 
+                new Date(Math.max(...files.map(f => new Date(f.modified)))).toLocaleDateString('pl-PL') : 
+                'Brak';
+            
+            document.getElementById('totalFiles').textContent = totalFiles;
+            document.getElementById('totalSessions').textContent = sessions;
+            document.getElementById('totalSize').textContent = totalSizeMB;
+            document.getElementById('lastDownload').textContent = lastDownload;
+        }
+        
+        function filterFiles() {
+            const query = document.getElementById('fileSearch').value.toLowerCase();
+            const fileItems = document.querySelectorAll('.file-item');
+            
+            fileItems.forEach(item => {
+                const filename = item.getAttribute('data-filename');
+                item.style.display = filename.includes(query) ? 'block' : 'none';
+            });
+        }
+        
+        function showSuccess(message) {
+            showToast(message, 'success');
+        }
+        
+        function showError(message) {
+            showToast(message, 'danger');
+        }
+        
+        function showToast(message, type) {
+            // Simple toast implementation
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} alert-dismissible position-fixed`;
+            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+            toast.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 5000);
+        }
+
+        // Album/Folder Management Functions
+        async function loadFolderSettings() {
+            try {
+                const response = await fetch('/api/settings/folder');
+                const data = await response.json();
+                
+                if (data.error) return;
+                
+                // Update album selector
+                const selector = document.getElementById('albumSelector');
+                selector.innerHTML = '';
+                
+                // Get current album name from path
+                const currentDir = data.current_download_dir;
+                const currentAlbum = currentDir.split('\\').pop() || currentDir.split('/').pop();
+                
+                data.available_albums.forEach(album => {
+                    const option = document.createElement('option');
+                    option.value = album;
+                    option.textContent = album;
+                    if (album === currentAlbum) {
+                        option.selected = true;
+                    }
+                    selector.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading folder settings:', error);
+            }
+        }
+
+        async function changeAlbum(albumName) {
+            try {
+                const response = await fetch('/api/settings/folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ album_name: albumName })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('Błąd zmiany albumu: ' + data.error);
+                    return;
+                }
+                
+                showSuccess(`Album zmieniony na: ${albumName}`);
+                
+                // Refresh file list and status
+                setTimeout(() => {
+                    refreshFiles();
+                    refreshStatus();
+                }, 1000);
+                
+            } catch (error) {
+                showError('Błąd podczas zmiany albumu');
+            }
+        }
+
+        async function addNewAlbum() {
+            const albumName = prompt('Podaj nazwę nowego albumu:');
+            if (!albumName || !albumName.trim()) return;
+            
+            try {
+                const response = await fetch('/api/settings/folder/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ album_name: albumName.trim() })
+                });
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('Błąd dodawania albumu: ' + data.error);
+                    return;
+                }
+                
+                showSuccess(`Album "${albumName}" został dodany`);
+                
+                // Reload folder settings to update selector
+                await loadFolderSettings();
+                
+                // Optionally switch to new album
+                if (confirm(`Czy chcesz przełączyć się na nowy album "${albumName}"?`)) {
+                    document.getElementById('albumSelector').value = albumName;
+                    changeAlbum(albumName);
+                }
+                
+            } catch (error) {
+                showError('Błąd podczas dodawania albumu');
+            }
+        }
+    </script>
+</body>
+</html>
