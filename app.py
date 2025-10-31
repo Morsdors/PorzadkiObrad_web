@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import json
 from pathlib import Path
+from dotenv import load_dotenv
 import sys
 
 # Import our existing functions (we'll refactor script.py)
@@ -13,6 +14,7 @@ from rada_scraper import (
     get_all_sesja_urls, download_specific_sesja, get_existing_sessions
 )
 
+load_dotenv()
 app = Flask(__name__)
 
 # Configuration

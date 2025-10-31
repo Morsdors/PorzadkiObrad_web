@@ -18,8 +18,8 @@ import tempfile
 DEF_URL = "https://bip.pila.pl/2025.html"
 BASE_SAVE_DIR = r"C:\Users\PC\Desktop\SesjeRady"
 
-# OpenRouter AI configuration
-OPENROUTER_API_KEY = "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"
+# OpenRouter AI configuration (read from environment)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = "nvidia/nemotron-nano-9b-v2:free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -250,43 +250,6 @@ def analyze_content_with_ai(content_text):
         return ""
 
 
-def _sanitize_word(word: str):
-    word = re.sub(r"[^\p{L}0-9]+", "", word, flags=re.UNICODE)
-    return word.strip().lower()
-
-
-def generate_fallback_keywords(link, original_filename):
-    """Generate up to 3 Polish-ish keywords from link text / filename if AI fails.
-    Very simple heuristic: take non-stopword tokens from link text first, then filename.
-    """
-    stopwords = {
-        'druk','nr','numer','projekt','uchwały','uchwala','uchwała','załącznik','plik','pdf','doc','docx','xls','xlsx',
-        'miasta','rady','pily','piły','porządek','obrad','sesji','sesja','do','w','i','o','na','z','dla','oraz','dot','dotycząca','dotyczący'
-    }
-    tokens = []
-    try:
-        link_text = link.get_text(strip=True) if link else ""
-    except Exception:
-        link_text = ""
-    filename_stem = os.path.splitext(os.path.basename(original_filename))[0]
-    raw_tokens = (link_text + " " + filename_stem).replace('_', ' ').split()
-    for t in raw_tokens:
-        s = _sanitize_word(t)
-        if not s or s in stopwords:
-            continue
-        tokens.append(s)
-    # keep first 3 unique tokens
-    seen = set()
-    uniq = []
-    for t in tokens:
-        if t not in seen:
-            seen.add(t)
-            uniq.append(t)
-        if len(uniq) == 3:
-            break
-    return "_".join(uniq)
-
-
 def generate_new_filename(link, original_filename, ai_keywords=""):
     """Generate new filename based on druk number, AI keywords, and file type."""
     druk_number = get_druk_number_from_link(link)
@@ -386,12 +349,6 @@ def download_attachments(porzadek_url, save_dir):
                 print(f"AI wygenerował słowa kluczowe: {ai_keywords}")
             else:
                 print("Nie udało się wyciągnąć tekstu z pliku")
-
-            # Fallback keywords if AI empty
-            if not ai_keywords:
-                ai_keywords = generate_fallback_keywords(link, original_filename)
-                if ai_keywords:
-                    print(f"Słowa kluczowe (fallback): {ai_keywords}")
             
             if exists and not has_keywords:
                 # File exists but without keywords - rename existing file and remove temp
